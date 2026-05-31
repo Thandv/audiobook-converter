@@ -62,6 +62,9 @@ class RenderConfig:
     # Per-sentence emotion overrides keyed by "<chapter>:<scene>:<idx_in_scene>".
     # Only consulted when emotion_analyzer != "tag".
     emotion_overrides: dict[str, str] = field(default_factory=dict)
+    # Resume: if True, skip chapters whose output file already exists and looks
+    # valid (>1 second duration). Lets you safely interrupt + restart long renders.
+    resume: bool = False
 
 
 def silence(seconds: float) -> np.ndarray:
@@ -225,12 +228,34 @@ class ChapterRenderResult:
     duration_seconds: float
 
 
+def _existing_chapter_audio(
+    chapters_dir: Path, idx: int, chapter: Chapter
+) -> tuple[Path, float] | None:
+    """Look for an already-rendered chapter file. Return (path, duration) if a
+    valid one exists, else None.
+
+    Checks both .mp3 and .wav. A file is considered valid if it's readable and
+    longer than 1 second (catches truncated / empty writes from a crash mid-write).
+    """
+    filename_base = f"{idx + 1:02d}_{_safe_filename(chapter.display_title)}"
+    for ext in (".mp3", ".wav"):
+        candidate = chapters_dir / f"{filename_base}{ext}"
+        if not candidate.exists():
+            continue
+        try:
+            with sf.SoundFile(str(candidate)) as snd:
+                duration = len(snd) / snd.samplerate if snd.samplerate else 0.0
+        except (sf.LibsndfileError, RuntimeError, OSError):
+            continue
+        if duration > 1.0:
+            return candidate, duration
+    return None
+
+
 def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
-    backend = make_backend(
-        config.backend_name,
-        model_dir=config.backend_model_dir,
-        library_root=config.backend_library_root,
-    )
+    # If we're going to render anything (i.e. not 100% resumed), instantiate
+    # the backend lazily so a pure-resume call doesn't pay the Kokoro load cost.
+    backend: Backend | None = None
     cast_names = set(config.voices.cast.keys())
     results: list[ChapterRenderResult] = []
 
@@ -242,6 +267,10 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
 
     chapters_dir = config.output_dir / "chapters"
     chapters_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resume bookkeeping.
+    resumed_count = 0
+    rendered_count = 0
 
     total_units = sum(
         sum(len(s.paragraphs) for s in ch.scenes) + 1
@@ -259,12 +288,37 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
         console=console,
     ) as progress:
         task = progress.add_task(
-            f"Rendering ({backend.name}, {config.mode})", total=total_units
+            f"Rendering ({config.backend_name}, {config.mode})", total=total_units
         )
 
         for idx, chapter in enumerate(book.chapters):
             progress.update(task, description=f"[bold]{chapter.display_title}")
+
+            # Resume: if a valid rendered file exists, reuse it.
+            if config.resume:
+                existing = _existing_chapter_audio(chapters_dir, idx, chapter)
+                if existing is not None:
+                    audio_path, duration = existing
+                    results.append(ChapterRenderResult(chapter, audio_path, duration))
+                    n_paragraphs = sum(len(s.paragraphs) for s in chapter.scenes)
+                    progress.advance(task, advance=1 + n_paragraphs)
+                    resumed_count += 1
+                    console.print(
+                        f"  [dim]resumed: {audio_path.name} ({duration:.0f}s)[/dim]"
+                    )
+                    continue
+
+            # Lazy-init the backend on first actual render — saves the Kokoro
+            # load cost if every chapter is being resumed from disk.
+            if backend is None:
+                backend = make_backend(
+                    config.backend_name,
+                    model_dir=config.backend_model_dir,
+                    library_root=config.backend_library_root,
+                )
+
             chunks: list[np.ndarray] = []
+            rendered_count += 1
 
             heading_text = chapter.title
             if chapter.subtitle:
@@ -336,5 +390,11 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
                 audio_path = audio_path.with_suffix(".wav")
 
             results.append(ChapterRenderResult(chapter, audio_path, duration))
+
+    if config.resume and resumed_count:
+        console.print(
+            f"[dim]Resume summary: {resumed_count} chapter(s) reused from disk, "
+            f"{rendered_count} freshly rendered.[/dim]"
+        )
 
     return results

@@ -225,11 +225,17 @@ def sample(
 @click.option("--cover", type=click.Path(exists=True, path_type=Path), default=None)
 @click.option("--no-m4b", is_flag=True, help="Skip M4B packaging step.")
 @click.option("--bitrate", default="64k", help="M4B audio bitrate.")
+@click.option(
+    "--resume", is_flag=True,
+    help="Skip chapters whose output audio file already exists and looks valid. "
+         "Use after an interrupted render to pick up where you left off.",
+)
 @_backend_options
 def render(
     manuscript: Path, mode: str,
     voices_path: Path | None, pron_path: Path | None,
     output: Path | None, cover: Path | None, no_m4b: bool, bitrate: str,
+    resume: bool,
     backend: str, backend_model_dir: Path | None, backend_library_root: Path | None,
     emotion_analyzer: str, overrides_path: Path | None,
 ) -> None:
@@ -253,6 +259,7 @@ def render(
             backend_library_root=backend_library_root,
             emotion_analyzer=emotion_analyzer,
             emotion_overrides=overrides,
+            resume=resume,
         )
         results = render_book(book, cfg)
         total_sec = sum(r.duration_seconds for r in results)

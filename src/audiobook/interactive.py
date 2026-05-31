@@ -208,6 +208,7 @@ def _confirm_and_render(
             backend_model_dir=backend_model_dir,
             backend_library_root=backend_library_root,
             emotion_analyzer="content",
+            resume=True,   # interactive runs always resume so users can ^C safely
         )
         results = render_book(book, cfg)
         total_sec = sum(r.duration_seconds for r in results)

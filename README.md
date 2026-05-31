@@ -93,6 +93,36 @@ output/
   multi/...
 ```
 
+### 4b. Resume an interrupted render
+
+A full render takes hours. If something kills it mid-way — laptop slept,
+you pressed `Ctrl+C`, SSH dropped — every completed chapter MP3 on disk
+is safe. Restart with `--resume` and the pipeline skips any chapter whose
+audio file already exists and looks valid:
+
+```bash
+audiobook render /path/to/book.md --mode single --emotion-analyzer content --resume
+```
+
+What `--resume` does, per chapter:
+- if `output/<mode>/chapters/NN_Title.mp3` (or `.wav`) exists AND is
+  readable AND has duration > 1 s, it's **reused** as-is and TTS is skipped
+- otherwise the chapter is rendered fresh and overwrites whatever's there
+
+The renderer prints a summary at the end (`Resume summary: N reused,
+M rendered`). If a chapter file got corrupted from a crash mid-write,
+delete that one file before re-running.
+
+**Pro tip for overnight runs**: pair `--resume` with `caffeinate`:
+
+```bash
+caffeinate -dimsu audiobook render /path/to/book.md --mode single --resume
+```
+
+`caffeinate` prevents idle sleep for the duration of the command — your
+laptop stays awake and the render finishes in one pass. Plug in the AC
+adapter; the lid can be open or shut (with external display).
+
 ### Or just run it interactively
 
 ```bash
