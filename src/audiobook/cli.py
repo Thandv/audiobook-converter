@@ -33,6 +33,14 @@ def _safe_book_filename(title: str) -> str:
     return out.replace(" ", "_") or "audiobook"
 
 
+def _load_overrides(path: Path | None) -> dict[str, str]:
+    """Load emotion overrides from a JSON file (or empty if path is None)."""
+    if path is None:
+        return {}
+    from .emotion_edit import load_overrides
+    return load_overrides(path)
+
+
 @click.group(invoke_without_command=True)
 @click.version_option(package_name="audiobook-converter")
 @click.pass_context
@@ -145,6 +153,11 @@ def _backend_options(f):
             "classifier (requires [ml] extras)."
         ),
     )(f)
+    f = click.option(
+        "--overrides", "overrides_path",
+        type=click.Path(exists=True, path_type=Path), default=None,
+        help="Path to emotion overrides JSON (from `audiobook emotions edit`).",
+    )(f)
     return f
 
 
@@ -163,7 +176,7 @@ def sample(
     manuscript: Path, mode: str, chapters: tuple[int, ...], paragraphs: int,
     voices_path: Path | None, pron_path: Path | None, output: Path | None,
     backend: str, backend_model_dir: Path | None, backend_library_root: Path | None,
-    emotion_analyzer: str,
+    emotion_analyzer: str, overrides_path: Path | None,
 ) -> None:
     """Render a short sample to verify setup and voice choices."""
     voices_path = voices_path or (_project_root() / "config" / "voices.yaml")
@@ -188,12 +201,14 @@ def sample(
         trimmed_chap.scenes = [Scene(paragraphs=flat)]
         trimmed.chapters.append(trimmed_chap)
 
+    overrides = _load_overrides(overrides_path)
     cfg = RenderConfig(
         mode=mode, output_dir=output / mode,
         pronouncer=pronouncer, voices=voice_cast,
         backend_name=backend, backend_model_dir=backend_model_dir,
         backend_library_root=backend_library_root,
         emotion_analyzer=emotion_analyzer,
+        emotion_overrides=overrides,
     )
     results = render_book(trimmed, cfg)
     console.print(f"\n[green]Wrote {len(results)} sample file(s) to {output / mode}[/green]")
@@ -216,7 +231,7 @@ def render(
     voices_path: Path | None, pron_path: Path | None,
     output: Path | None, cover: Path | None, no_m4b: bool, bitrate: str,
     backend: str, backend_model_dir: Path | None, backend_library_root: Path | None,
-    emotion_analyzer: str,
+    emotion_analyzer: str, overrides_path: Path | None,
 ) -> None:
     """Render the full book — per-chapter MP3s + optional .m4b."""
     voices_path = voices_path or (_project_root() / "config" / "voices.yaml")
@@ -227,6 +242,7 @@ def render(
     voice_cast = load_voice_cast(voices_path)
     pronouncer = load_pronunciations(pron_path) if pron_path.exists() else None
 
+    overrides = _load_overrides(overrides_path)
     modes = ["single", "multi"] if mode == "both" else [mode]
     for m in modes:
         console.rule(f"[bold]{m.upper()} narrator mode  ({backend})")
@@ -236,6 +252,7 @@ def render(
             backend_name=backend, backend_model_dir=backend_model_dir,
             backend_library_root=backend_library_root,
             emotion_analyzer=emotion_analyzer,
+            emotion_overrides=overrides,
         )
         results = render_book(book, cfg)
         total_sec = sum(r.duration_seconds for r in results)

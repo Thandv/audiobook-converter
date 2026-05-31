@@ -6,7 +6,7 @@ Picks the TTS backend (kokoro / xtts) per RenderConfig.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -59,6 +59,9 @@ class RenderConfig:
     #   "content"   - tag + lexicon content analysis with consistency
     #   "content+ml" - all three layers (requires [ml] extras)
     emotion_analyzer: str = "tag"
+    # Per-sentence emotion overrides keyed by "<chapter>:<scene>:<idx_in_scene>".
+    # Only consulted when emotion_analyzer != "tag".
+    emotion_overrides: dict[str, str] = field(default_factory=dict)
 
 
 def silence(seconds: float) -> np.ndarray:
@@ -125,10 +128,14 @@ def _paragraph_to_emotion_segments(
     attribution_state: SceneState,
     cast: set[str],
     analyzer: EmotionAnalyzer,
+    chapter_number: int,
+    scene_index: int,
+    scene_sentence_counter: list[int],   # single-element box for mutation
+    overrides: dict[str, str],
 ) -> list[EmotionSegment]:
     """Sentence-aware split: per-sentence emotion, merging consecutive
     sentences that share (speaker, emotion) into one segment to avoid
-    audio whiplash."""
+    audio whiplash. Consults overrides keyed by chapter:scene:sent_idx."""
     utts = _paragraph_to_utterances(paragraph, mode, attribution_state, cast)
     surround_narration = " ".join(
         u.text for u in utts if not u.is_dialogue
@@ -146,7 +153,10 @@ def _paragraph_to_emotion_segments(
                 is_dialogue=utt.is_dialogue,
             )
             result = analyzer.analyze(sent, ctx)
-            emo = result.emotion
+            sent_idx = scene_sentence_counter[0]
+            scene_sentence_counter[0] += 1
+            key = f"{chapter_number}:{scene_index}:{sent_idx}"
+            emo = overrides.get(key, result.emotion)
             # Merge with previous segment if (speaker, emotion) match —
             # this is the consistency-preserving step at the audio boundary.
             if (
@@ -272,6 +282,8 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
                 state = SceneState.fresh()
                 if analyzer is not None:
                     analyzer.reset_scene()
+                # Mutable counter for sentence index within this scene.
+                scene_sent_counter = [0]
                 for p_i, paragraph in enumerate(scene.paragraphs):
                     if analyzer is not None:
                         # Sentence-aware path: per-sentence emotion with
@@ -283,6 +295,10 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
                             attribution_state=state,
                             cast=cast_names,
                             analyzer=analyzer,
+                            chapter_number=chapter.number,
+                            scene_index=s_i,
+                            scene_sentence_counter=scene_sent_counter,
+                            overrides=config.emotion_overrides,
                         )
                         for seg_i, seg in enumerate(segments):
                             audio = _render_segment(backend, seg, config.voices, config.pronouncer)

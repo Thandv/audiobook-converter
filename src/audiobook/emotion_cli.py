@@ -245,6 +245,49 @@ def preview(
 
 
 # ---------------------------------------------------------------------------
+# edit (interactive)
+# ---------------------------------------------------------------------------
+
+
+@emotions.command("edit")
+@click.argument("manuscript", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--overrides", "overrides_path", type=click.Path(path_type=Path), default=None,
+    help="Path to overrides.json (default: output/emotion_overrides.json).",
+)
+@click.option("--analyzer", type=click.Choice(["content", "content+ml"]), default="content")
+@click.option("--mode", type=click.Choice(["single", "multi"]), default="multi")
+@click.option(
+    "--start",
+    type=click.Choice(["beginning", "non-neutral", "low-confidence", "dialogue"]),
+    default="non-neutral",
+    help="Where to start reviewing.",
+)
+def edit(
+    manuscript: Path, overrides_path: Path | None, analyzer: str, mode: str,
+    start: str,
+) -> None:
+    """Interactively review and override per-sentence emotion labels.
+
+    Walks every sentence the analyzer produced and lets you override any
+    with single keypresses (1=neutral, 2=happy, 3=sad, 4=angry, ...).
+    Save to JSON; the renderer uses overrides via `--overrides path`.
+    """
+    from .emotion_edit import edit_interactive
+
+    overrides_path = overrides_path or (
+        _project_root() / "output" / "emotion_overrides.json"
+    )
+    edit_interactive(
+        manuscript=manuscript,
+        overrides_path=overrides_path,
+        use_ml=(analyzer == "content+ml"),
+        mode=mode,
+        start_filter=None if start == "beginning" else start,
+    )
+
+
+# ---------------------------------------------------------------------------
 # lexicon
 # ---------------------------------------------------------------------------
 
