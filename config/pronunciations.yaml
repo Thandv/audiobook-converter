@@ -1,0 +1,71 @@
+# Pronunciation overrides for invented names.
+#
+# The pipeline does a whole-word, case-preserving substitution before TTS.
+# Use phonetic-friendly English spellings — Kokoro routes through espeak-ng,
+# so spell things the way you want them spoken aloud.
+#
+# Format:  Original: PhoneticSpelling
+# Match is whole-word, case-insensitive. Output preserves the original casing
+# (first letter capitalized vs. all caps) where reasonable.
+
+# --- People ---
+Gael:      "Gale"
+Voss:      "Voss"
+Aldren:    "All-dren"
+Sera:      "Sair-ah"
+Mira:      "Meer-ah"
+Kerrin:    "Kair-in"
+Corvin:    "Core-vin"
+Edric:     "Ed-rik"
+Sevet:     "Suh-vett"
+Hamund:    "Hay-mund"
+Brenneth:  "Bren-eth"
+Orath:     "Or-ath"
+Kestra:    "Kess-trah"
+Dorsa:     "Dor-sah"
+Orren:     "Or-en"
+Elleth:    "El-eth"
+Varon:     "Vair-on"
+Deran:     "Dair-en"
+Haverth:   "Hav-erth"
+Tarrin:    "Tair-in"
+Marrow:    "Marrow"
+Laren:     "Lair-en"
+Mara:      "Mar-ah"
+Brask:     "Brask"
+Hessel:    "Hess-el"
+Rellen:    "Rell-en"
+Aven:      "Ay-ven"
+Dessa:     "Dess-ah"
+Vorell:    "Vor-ell"
+Garrick:   "Gair-ick"
+Drevan:    "Drev-en"
+Kessler:   "Kess-ler"
+Reske:     "Resk"
+Breck:     "Breck"
+Hask:      "Hask"
+
+# --- Places ---
+Dusthollow:   "Dust Hollow"
+Thornwatch:   "Thorn Watch"
+Hellsmouth:   "Hells Mouth"
+Saltmarsh:    "Salt Marsh"
+Greymarch:    "Grey March"
+Wickford:     "Wick Ford"
+"Orrin's Ford": "Orrin's Ford"
+Rathkor:      "Rath-core"
+
+# --- Concepts / terms ---
+echoforms:   "echo-forms"
+echoform:    "echo-form"
+ward-keeper: "ward keeper"
+ward-stone:  "ward stone"
+ward-stones: "ward stones"
+ward-line:   "ward line"
+ward-lines:  "ward lines"
+mid-Second-Warming: "mid second warming"
+First-Warming:  "first warming"
+Second-Warming: "second warming"
+Third-Warming:  "third warming"
+Fourth-Warming: "fourth warming"
+Fifth-Warming:  "fifth warming"

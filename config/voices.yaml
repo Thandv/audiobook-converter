@@ -1,0 +1,102 @@
+# Voice cast configuration.
+#
+# Top-level shape:
+#   narrator: { voice, speed, emotions? }
+#   cast:
+#     <Name>: { voice, speed, emotions? }
+#
+# `voice` is backend-specific:
+#   - Kokoro: voice ID like 'bm_george'
+#   - XTTS:   speaker name in the fine-tuned model (after `audiobook train`)
+#
+# `emotions` is an OPTIONAL map of emotion -> partial { voice, speed }
+# overrides. Emotions are detected automatically from dialogue tags
+# (whispered/shouted/growled/etc.) and apply only to that utterance.
+# Recognized emotion labels:
+#   neutral, happy, sad, angry, fearful, surprised,
+#   disgusted, whispered, excited, calm
+#
+# ---- Kokoro v1.0 voices (only top-graded shown) ----
+# American female:  af_heart, af_bella, af_nicole, af_sarah, af_sky
+# American male:    am_michael, am_fenrir, am_puck, am_eric, am_liam
+# British female:   bf_emma, bf_isabella, bf_alice, bf_lily
+# British male:     bm_george, bm_fable, bm_lewis, bm_daniel
+
+narrator:
+  voice: bm_george
+  speed: 0.92
+  emotions:
+    whispered: { speed: 0.78 }
+    calm:      { speed: 0.88 }
+    excited:   { speed: 1.02 }
+    angry:     { speed: 0.98 }
+    sad:       { speed: 0.86 }
+
+cast:
+  # ---- The Voss household ----
+  Gael:
+    voice: am_puck
+    speed: 1.00
+    emotions:
+      whispered: { speed: 0.82 }
+      angry:     { speed: 1.05 }
+      sad:       { speed: 0.92 }
+      excited:   { speed: 1.08 }
+
+  Aldren:
+    voice: am_michael
+    speed: 0.95
+    emotions:
+      angry:     { speed: 0.98 }
+      calm:      { speed: 0.90 }
+
+  Sera:
+    voice: af_sarah
+    speed: 0.98
+    emotions:
+      whispered: { speed: 0.82 }
+      sad:       { speed: 0.88 }
+
+  Mira:     { voice: af_sky,      speed: 1.05 }
+  Kerrin:   { voice: am_liam,     speed: 1.02 }
+  Corvin:   { voice: bm_lewis,    speed: 0.90 }
+  Edric:    { voice: bm_daniel,   speed: 0.88 }
+
+  # ---- Allies / mentors ----
+  Sevet:
+    voice: bf_isabella
+    speed: 0.90
+    emotions:
+      whispered: { speed: 0.78 }
+      calm:      { speed: 0.86 }
+  Hamund:   { voice: bm_fable,    speed: 0.90 }
+  Brenneth: { voice: bf_emma,     speed: 0.95 }
+  Orath:    { voice: am_fenrir,   speed: 0.95 }
+  Dorsa:    { voice: bf_alice,    speed: 0.92 }
+
+  # ---- Cohort ----
+  Deran:    { voice: am_eric,     speed: 1.05 }
+  Tarrin:   { voice: am_michael,  speed: 1.00 }
+  Laren:    { voice: af_nicole,   speed: 1.00 }
+  Mara:     { voice: af_bella,    speed: 1.00 }
+  Brask:    { voice: am_liam,     speed: 1.00 }
+  Hessel:   { voice: am_eric,     speed: 1.05 }
+  Rellen:   { voice: am_puck,     speed: 1.00 }
+
+  # ---- Apparatus / military ----
+  Vorell:   { voice: af_heart,    speed: 0.92 }
+  Garrick:  { voice: bm_lewis,    speed: 0.90 }
+  Drevan:   { voice: bm_george,   speed: 0.92 }
+  Kessler:
+    voice: am_michael
+    speed: 0.92
+    emotions:
+      angry:    { speed: 0.95 }
+  Reske:    { voice: am_fenrir,   speed: 1.00 }
+  Breck:    { voice: bm_daniel,   speed: 0.95 }
+
+  # ---- Fallbacks ----
+  _OTHER:   { voice: am_eric,     speed: 1.00 }
+  _man:     { voice: bm_lewis,    speed: 1.00 }
+  _woman:   { voice: bf_isabella, speed: 1.00 }
+  _child:   { voice: af_sky,      speed: 1.05 }

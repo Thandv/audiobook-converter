@@ -1,0 +1,82 @@
+[project]
+name = "audiobook-converter"
+version = "0.2.0"
+description = "Manuscript markdown to M4B audiobook pipeline (Kokoro TTS + optional fine-tuned XTTS for emotion)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Gokul P M" },
+]
+keywords = ["audiobook", "tts", "kokoro", "xtts", "text-to-speech", "fiction"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "kokoro>=0.9.4",
+    "soundfile>=0.12.1",
+    "numpy>=1.26",
+    "pydub>=0.25.1",
+    "click>=8.1.7",
+    "pyyaml>=6.0.1",
+    "tqdm>=4.66",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+# Heavy ML stack for fine-tuning + the XTTS backend. Install with:
+#   pip install -e ".[training]"
+training = [
+    "torch>=2.2",
+    "torchaudio>=2.2",
+    "coqui-tts>=0.27",
+    "librosa>=0.10",
+    "loguru>=0.7",
+]
+# Bundling tools for the standalone-binary `make binary` target.
+binary = [
+    "pyinstaller>=6.6",
+]
+# Everything (for development).
+dev = [
+    "audiobook-converter[training,binary]",
+    "pytest>=7.4",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+audiobook = "audiobook.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/gokulpm/audiobook-converter"
+Issues = "https://github.com/gokulpm/audiobook-converter/issues"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+audiobook = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+parts/
+sdist/
+wheels/
+share/
+*.egg
+MANIFEST
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# Audio output — never commit. These are gigabytes of generated audio.
+output/
+samples/
+*.mp3
+*.m4b
+*.wav
+*.flac
+*.ogg
+
+# Model checkpoints and caches — gigabytes per model.
+models/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+.cache/
+
+# Training datasets — too big for git, and often have license restrictions.
+datasets/
+data/raw/
+data/processed/
+
+# Manuscripts — user-supplied content. Place yours in input/ and it stays local.
+input/
+*.docx
+manuscripts/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# PyInstaller
+*.spec.bak
+*.manifest
+
+# Cover art / image temp files (commit covers explicitly to assets/ if wanted)
+assets/cover_*.png
+assets/cover_*.jpg
