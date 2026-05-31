@@ -141,6 +141,89 @@ Dusthollow: "Dust Hollow"
 
 ## Emotion: how it works
 
+**Two orthogonal axes** — pick from each:
+
+- **What emotion to use** (the *analyzer*) — Tag-only? Lexicon-based content
+  analysis? Add ML?
+- **How to express it** (the *backend*) — Kokoro speed nudge? XTTS voice clone
+  from emotional reference? Chatterbox intensity knob? A fine-tuned model?
+
+You can combine any analyzer with any backend.
+
+### The emotion *analyzer* — detecting what emotion each sentence needs
+
+Operates per-sentence with a **consistency filter** that prevents whiplash.
+Three modes:
+
+| Mode | What it does | Setup | Default? |
+|---|---|---|---|
+| `tag` | Original: dialogue-tag verbs + ALL-CAPS + `!!` only | None | No |
+| `content` | tag + bundled 600-word lexicon + consistency filter | None | **Yes** |
+| `content+ml` | all above + transformers contextual classifier | `pip install -e ".[ml]"` (~250 MB) | No |
+
+What the analyzer does, in order, per sentence:
+
+1. **Tag layer** — checks adjacent narration for dialogue verbs (whispered,
+   shouted, growled, sobbed, gasped, laughed, …) plus heuristics for
+   ALL-CAPS and `!!`. Highest confidence when it fires.
+2. **Lexicon layer** — scans each sentence for ~600 emotion-laden words
+   (rage, smile, trembled, hushed, …). Handles negation (`not happy` ≠ happy)
+   and intensifiers (`very angry` > `angry`). Per-emotion weighted scoring.
+3. **ML layer (optional)** — feeds the sentence to a small DistilRoBERTa
+   classifier (`j-hartmann/emotion-english-distilroberta-base`, ~66 MB).
+   Catches what the lexicon misses (context, sarcasm, implication).
+
+Then the **consistency filter** decides whether to accept the new emotion:
+
+- **Per-speaker state**: each speaker carries an emotional baseline through
+  a scene. Gael doesn't flip happy→sad→happy between paragraphs.
+- **Transition threshold**: switching emotion requires confidence ≥ 0.55.
+  Below that, the speaker stays where they were.
+- **Smoothing window**: votes from the last 3 sentences. A single fluke
+  word doesn't trigger a transition.
+- **Scene baseline**: first ~5 sentences set the scene's tone (`tense`,
+  `tender`, `calm`). Subsequent neutral sentences inherit it.
+- **Decay**: after 6 sentences without reinforcement, an emotion fades
+  back toward the scene baseline.
+
+You can inspect what the analyzer thinks before rendering:
+
+```bash
+# Per-sentence emotion JSON for the whole book (or specific chapters)
+audiobook emotions analyze /path/to/manuscript.md --analyzer content
+
+# Aggregate distribution + speaker-x-emotion breakdown
+audiobook emotions stats /path/to/manuscript.md
+
+# Render the same line in different emotions to verify the voice config
+audiobook emotions preview --character Gael \
+  --emotions "neutral,angry,whispered,excited" \
+  --text "Listen. Something is wrong with the stones tonight."
+
+# Show what's in the bundled lexicon
+audiobook emotions lexicon
+```
+
+To use it at render time:
+
+```bash
+# Default — content analysis with consistency
+audiobook render /path/to/book.md --mode multi --emotion-analyzer content
+
+# With ML for better contextual accuracy
+pip install -e ".[ml]"
+audiobook render /path/to/book.md --mode multi --emotion-analyzer content+ml
+
+# Old behavior (tag detection only, no per-sentence analysis)
+audiobook render /path/to/book.md --emotion-analyzer tag
+```
+
+The analyzer produces **sentence-level emotion segments**; the renderer
+merges adjacent same-emotion same-speaker sentences into one TTS call,
+so you never get an awkward voice-switch inside a single sentence.
+
+### The emotion *backend* — actually voicing the emotion
+
 Three escalating layers — pick the one whose setup cost matches the
 emotional fidelity you want.
 
@@ -330,7 +413,10 @@ audiobook-converter/
     ├── parser.py               # markdown -> chapters/scenes/paragraphs
     ├── attribution.py          # rule-based dialogue speaker tagging
     ├── pronounce.py            # phonetic substitution
-    ├── emotion.py              # dialogue-tag -> emotion label
+    ├── emotion.py              # dialogue-tag -> emotion label (Layer A)
+    ├── emotion_lexicon.py      # bundled 600-word emotion lexicon (Layer B)
+    ├── emotion_analyzer.py     # multi-layer analyzer + consistency filter
+    ├── emotion_cli.py          # `audiobook emotions ...` subcommands
     ├── voice_library.py        # voices/<character>/<emotion>.wav tree
     ├── voice_cli.py            # `audiobook voices ...` subcommands
     ├── synth.py                # backend factory + voice cast loader

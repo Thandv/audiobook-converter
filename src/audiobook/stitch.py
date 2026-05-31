@@ -24,6 +24,12 @@ from rich.progress import (
 from .attribution import SceneState, Utterance, attribute_paragraph, DEFAULT_PRONOUNS
 from .backends.base import Backend
 from .emotion import detect_emotion
+from .emotion_analyzer import (
+    AnalysisContext,
+    EmotionAnalyzer,
+    SentenceEmotion,
+    split_sentences,
+)
 from .parser import Book, Chapter, Paragraph, Scene
 from .pronounce import PronunciationMap
 from .synth import SAMPLE_RATE, VoiceCast, make_backend
@@ -48,6 +54,11 @@ class RenderConfig:
     backend_name: str = "kokoro"           # kokoro | xtts | cloning | chatterbox
     backend_model_dir: Path | None = None  # required for xtts
     backend_library_root: Path | None = None  # required for cloning / chatterbox
+    # Emotion analyzer:
+    #   "tag"       - dialogue-tag detection only (the original behavior)
+    #   "content"   - tag + lexicon content analysis with consistency
+    #   "content+ml" - all three layers (requires [ml] extras)
+    emotion_analyzer: str = "tag"
 
 
 def silence(seconds: float) -> np.ndarray:
@@ -95,6 +106,82 @@ def _emotion_for(utt: Utterance, neighbors: list[Utterance]) -> str:
     return detect_emotion(utt.text, surround)
 
 
+@dataclass
+class EmotionSegment:
+    """One render-able chunk: a contiguous run of text that shares
+    speaker AND emotion. Used by the sentence-aware render path.
+    """
+
+    speaker: str
+    text: str
+    emotion: str
+    is_dialogue: bool
+
+
+def _paragraph_to_emotion_segments(
+    paragraph: Paragraph,
+    *,
+    mode: str,
+    attribution_state: SceneState,
+    cast: set[str],
+    analyzer: EmotionAnalyzer,
+) -> list[EmotionSegment]:
+    """Sentence-aware split: per-sentence emotion, merging consecutive
+    sentences that share (speaker, emotion) into one segment to avoid
+    audio whiplash."""
+    utts = _paragraph_to_utterances(paragraph, mode, attribution_state, cast)
+    surround_narration = " ".join(
+        u.text for u in utts if not u.is_dialogue
+    )
+
+    segments: list[EmotionSegment] = []
+    for utt in utts:
+        sentences = split_sentences(utt.text)
+        if not sentences:
+            sentences = [utt.text]
+        for sent in sentences:
+            ctx = AnalysisContext(
+                speaker=utt.speaker,
+                surrounding_narration=surround_narration if utt.is_dialogue else "",
+                is_dialogue=utt.is_dialogue,
+            )
+            result = analyzer.analyze(sent, ctx)
+            emo = result.emotion
+            # Merge with previous segment if (speaker, emotion) match —
+            # this is the consistency-preserving step at the audio boundary.
+            if (
+                segments
+                and segments[-1].speaker == utt.speaker
+                and segments[-1].emotion == emo
+                and segments[-1].is_dialogue == utt.is_dialogue
+            ):
+                segments[-1] = EmotionSegment(
+                    speaker=utt.speaker,
+                    text=segments[-1].text + " " + sent,
+                    emotion=emo,
+                    is_dialogue=utt.is_dialogue,
+                )
+            else:
+                segments.append(EmotionSegment(
+                    speaker=utt.speaker,
+                    text=sent,
+                    emotion=emo,
+                    is_dialogue=utt.is_dialogue,
+                ))
+    return segments
+
+
+def _render_segment(
+    backend: Backend, seg: EmotionSegment, voices: VoiceCast,
+    pronouncer: PronunciationMap | None,
+) -> np.ndarray:
+    text = seg.text
+    if pronouncer is not None:
+        text = pronouncer.apply(text)
+    voice = voices.for_speaker(seg.speaker)
+    return backend.synthesize(text, voice, emotion=seg.emotion)
+
+
 def _render_utterance(
     backend: Backend, utt: Utterance, voices: VoiceCast,
     pronouncer: PronunciationMap | None, emotion: str,
@@ -137,6 +224,12 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
     cast_names = set(config.voices.cast.keys())
     results: list[ChapterRenderResult] = []
 
+    # Set up the content-aware emotion analyzer, or None for tag-only mode.
+    use_content_analyzer = config.emotion_analyzer in ("content", "content+ml")
+    analyzer: EmotionAnalyzer | None = None
+    if use_content_analyzer:
+        analyzer = EmotionAnalyzer(use_ml=(config.emotion_analyzer == "content+ml"))
+
     chapters_dir = config.output_dir / "chapters"
     chapters_dir.mkdir(parents=True, exist_ok=True)
 
@@ -177,17 +270,38 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
 
             for s_i, scene in enumerate(chapter.scenes):
                 state = SceneState.fresh()
+                if analyzer is not None:
+                    analyzer.reset_scene()
                 for p_i, paragraph in enumerate(scene.paragraphs):
-                    utts = _paragraph_to_utterances(
-                        paragraph, config.mode, state, cast_names
-                    )
-                    for u_i, u in enumerate(utts):
-                        emotion = _emotion_for(u, utts)
-                        audio = _render_utterance(backend, u, config.voices, config.pronouncer, emotion)
-                        if audio.size:
-                            chunks.append(audio)
-                        if u_i < len(utts) - 1:
-                            chunks.append(silence(PAUSE_INTRA_PARAGRAPH))
+                    if analyzer is not None:
+                        # Sentence-aware path: per-sentence emotion with
+                        # consistency filter, contiguous (speaker, emotion)
+                        # runs merged into one segment.
+                        segments = _paragraph_to_emotion_segments(
+                            paragraph,
+                            mode=config.mode,
+                            attribution_state=state,
+                            cast=cast_names,
+                            analyzer=analyzer,
+                        )
+                        for seg_i, seg in enumerate(segments):
+                            audio = _render_segment(backend, seg, config.voices, config.pronouncer)
+                            if audio.size:
+                                chunks.append(audio)
+                            if seg_i < len(segments) - 1:
+                                chunks.append(silence(PAUSE_INTRA_PARAGRAPH))
+                    else:
+                        # Paragraph-level tag-only path (original behavior).
+                        utts = _paragraph_to_utterances(
+                            paragraph, config.mode, state, cast_names
+                        )
+                        for u_i, u in enumerate(utts):
+                            emotion = _emotion_for(u, utts)
+                            audio = _render_utterance(backend, u, config.voices, config.pronouncer, emotion)
+                            if audio.size:
+                                chunks.append(audio)
+                            if u_i < len(utts) - 1:
+                                chunks.append(silence(PAUSE_INTRA_PARAGRAPH))
                     if p_i < len(scene.paragraphs) - 1:
                         chunks.append(silence(PAUSE_BETWEEN_PARAGRAPHS))
                     progress.advance(task)

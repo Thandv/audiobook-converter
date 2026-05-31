@@ -134,6 +134,17 @@ def _backend_options(f):
         type=click.Path(exists=True, path_type=Path), default=None,
         help="Path to voice library (required if --backend cloning or chatterbox).",
     )(f)
+    f = click.option(
+        "--emotion-analyzer", "emotion_analyzer",
+        type=click.Choice(["tag", "content", "content+ml"]),
+        default="content",
+        help=(
+            "Emotion analyzer: 'tag' = dialogue-tag detection only; "
+            "'content' = tag + bundled lexicon with consistency filter "
+            "(recommended); 'content+ml' = adds a transformers-based "
+            "classifier (requires [ml] extras)."
+        ),
+    )(f)
     return f
 
 
@@ -152,6 +163,7 @@ def sample(
     manuscript: Path, mode: str, chapters: tuple[int, ...], paragraphs: int,
     voices_path: Path | None, pron_path: Path | None, output: Path | None,
     backend: str, backend_model_dir: Path | None, backend_library_root: Path | None,
+    emotion_analyzer: str,
 ) -> None:
     """Render a short sample to verify setup and voice choices."""
     voices_path = voices_path or (_project_root() / "config" / "voices.yaml")
@@ -181,6 +193,7 @@ def sample(
         pronouncer=pronouncer, voices=voice_cast,
         backend_name=backend, backend_model_dir=backend_model_dir,
         backend_library_root=backend_library_root,
+        emotion_analyzer=emotion_analyzer,
     )
     results = render_book(trimmed, cfg)
     console.print(f"\n[green]Wrote {len(results)} sample file(s) to {output / mode}[/green]")
@@ -203,6 +216,7 @@ def render(
     voices_path: Path | None, pron_path: Path | None,
     output: Path | None, cover: Path | None, no_m4b: bool, bitrate: str,
     backend: str, backend_model_dir: Path | None, backend_library_root: Path | None,
+    emotion_analyzer: str,
 ) -> None:
     """Render the full book — per-chapter MP3s + optional .m4b."""
     voices_path = voices_path or (_project_root() / "config" / "voices.yaml")
@@ -221,6 +235,7 @@ def render(
             pronouncer=pronouncer, voices=voice_cast,
             backend_name=backend, backend_model_dir=backend_model_dir,
             backend_library_root=backend_library_root,
+            emotion_analyzer=emotion_analyzer,
         )
         results = render_book(book, cfg)
         total_sec = sum(r.duration_seconds for r in results)
@@ -277,6 +292,10 @@ def repackage(
 # Voice library management (`audiobook voices ...`). Always available.
 from .voice_cli import voices as _voices_group  # noqa: E402
 cli.add_command(_voices_group)
+
+# Emotion analysis (`audiobook emotions ...`). Always available.
+from .emotion_cli import emotions as _emotions_group  # noqa: E402
+cli.add_command(_emotions_group)
 
 
 # Lazy import + register the training subcommand group. Keeping the
