@@ -6,12 +6,16 @@
 #     <Name>: { voice, speed, emotions? }
 #
 # `voice` is backend-specific:
-#   - Kokoro: voice ID like 'bm_george'
-#   - XTTS:   speaker name in the fine-tuned model (after `audiobook train`)
+#   - Kokoro:                voice ID like 'bm_george'
+#   - XTTS (fine-tuned):     speaker name from `audiobook train`
+#   - Cloning / Chatterbox:  character name; matches voices/<NAME>/*.wav
+#                            in the voice library
 #
 # `emotions` is an OPTIONAL map of emotion -> partial { voice, speed }
 # overrides. Emotions are detected automatically from dialogue tags
 # (whispered/shouted/growled/etc.) and apply only to that utterance.
+# For the cloning / chatterbox backends, emotion *also* selects the right
+# reference clip from the library (e.g. voices/Gael/angry.wav).
 # Recognized emotion labels:
 #   neutral, happy, sad, angry, fearful, surprised,
 #   disgusted, whispered, excited, calm

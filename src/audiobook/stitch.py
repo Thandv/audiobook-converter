@@ -45,8 +45,9 @@ class RenderConfig:
     output_dir: Path
     pronouncer: PronunciationMap | None
     voices: VoiceCast
-    backend_name: str = "kokoro"       # "kokoro" or "xtts"
+    backend_name: str = "kokoro"           # kokoro | xtts | cloning | chatterbox
     backend_model_dir: Path | None = None  # required for xtts
+    backend_library_root: Path | None = None  # required for cloning / chatterbox
 
 
 def silence(seconds: float) -> np.ndarray:
@@ -131,6 +132,7 @@ def render_book(book: Book, config: RenderConfig) -> list[ChapterRenderResult]:
     backend = make_backend(
         config.backend_name,
         model_dir=config.backend_model_dir,
+        library_root=config.backend_library_root,
     )
     cast_names = set(config.voices.cast.keys())
     results: list[ChapterRenderResult] = []

@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Heavy ML stack for fine-tuning + the XTTS backend. Install with:
+# Heavy ML stack for fine-tuning + the XTTS and cloning backends. Install with:
 #   pip install -e ".[training]"
 training = [
     "torch>=2.2",
@@ -44,6 +44,15 @@ training = [
     "coqui-tts>=0.27",
     "librosa>=0.10",
     "loguru>=0.7",
+    "scipy>=1.11",
+    "sounddevice>=0.4.6",     # for `audiobook voices record`
+]
+# Chatterbox emotion-aware TTS backend.
+chatterbox = [
+    "chatterbox-tts>=0.1.4",
+    "torch>=2.2",
+    "torchaudio>=2.2",
+    "scipy>=1.11",
 ]
 # Bundling tools for the standalone-binary `make binary` target.
 binary = [
@@ -51,7 +60,7 @@ binary = [
 ]
 # Everything (for development).
 dev = [
-    "audiobook-converter[training,binary]",
+    "audiobook-converter[training,chatterbox,binary]",
     "pytest>=7.4",
     "ruff>=0.5",
 ]

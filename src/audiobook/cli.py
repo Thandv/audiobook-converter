@@ -119,13 +119,20 @@ def attribute(manuscript: Path, voices_path: Path | None, output: Path | None) -
 
 def _backend_options(f):
     f = click.option(
-        "--backend", type=click.Choice(["kokoro", "xtts"]), default="kokoro",
-        help="TTS backend. xtts requires a fine-tuned model directory."
+        "--backend",
+        type=click.Choice(["kokoro", "xtts", "cloning", "chatterbox"]),
+        default="kokoro",
+        help="TTS backend. xtts needs --model-dir; cloning/chatterbox need --library.",
     )(f)
     f = click.option(
         "--model-dir", "backend_model_dir",
         type=click.Path(exists=True, path_type=Path), default=None,
-        help="Path to fine-tuned XTTS model (required if --backend xtts)."
+        help="Path to fine-tuned XTTS model (required if --backend xtts).",
+    )(f)
+    f = click.option(
+        "--library", "backend_library_root",
+        type=click.Path(exists=True, path_type=Path), default=None,
+        help="Path to voice library (required if --backend cloning or chatterbox).",
     )(f)
     return f
 
@@ -144,7 +151,7 @@ def _backend_options(f):
 def sample(
     manuscript: Path, mode: str, chapters: tuple[int, ...], paragraphs: int,
     voices_path: Path | None, pron_path: Path | None, output: Path | None,
-    backend: str, backend_model_dir: Path | None,
+    backend: str, backend_model_dir: Path | None, backend_library_root: Path | None,
 ) -> None:
     """Render a short sample to verify setup and voice choices."""
     voices_path = voices_path or (_project_root() / "config" / "voices.yaml")
@@ -173,6 +180,7 @@ def sample(
         mode=mode, output_dir=output / mode,
         pronouncer=pronouncer, voices=voice_cast,
         backend_name=backend, backend_model_dir=backend_model_dir,
+        backend_library_root=backend_library_root,
     )
     results = render_book(trimmed, cfg)
     console.print(f"\n[green]Wrote {len(results)} sample file(s) to {output / mode}[/green]")
@@ -194,7 +202,7 @@ def render(
     manuscript: Path, mode: str,
     voices_path: Path | None, pron_path: Path | None,
     output: Path | None, cover: Path | None, no_m4b: bool, bitrate: str,
-    backend: str, backend_model_dir: Path | None,
+    backend: str, backend_model_dir: Path | None, backend_library_root: Path | None,
 ) -> None:
     """Render the full book — per-chapter MP3s + optional .m4b."""
     voices_path = voices_path or (_project_root() / "config" / "voices.yaml")
@@ -212,6 +220,7 @@ def render(
             mode=m, output_dir=output / m,
             pronouncer=pronouncer, voices=voice_cast,
             backend_name=backend, backend_model_dir=backend_model_dir,
+            backend_library_root=backend_library_root,
         )
         results = render_book(book, cfg)
         total_sec = sum(r.duration_seconds for r in results)
@@ -263,6 +272,11 @@ def repackage(
         out_path, bitrate=bitrate,
     )
     console.print(f"[green]M4B written: {out_path}[/green]")
+
+
+# Voice library management (`audiobook voices ...`). Always available.
+from .voice_cli import voices as _voices_group  # noqa: E402
+cli.add_command(_voices_group)
 
 
 # Lazy import + register the training subcommand group. Keeping the

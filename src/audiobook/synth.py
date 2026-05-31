@@ -53,7 +53,16 @@ def load_voice_cast(path: Path) -> VoiceCast:
 
 
 def make_backend(name: str, **kwargs) -> Backend:
-    """Factory — instantiate a backend by short name."""
+    """Factory — instantiate a backend by short name.
+
+    Backends:
+      - kokoro:     local, free, no training/library required (default).
+      - xtts:       fine-tuned XTTS v2 model — needs `model_dir`.
+      - cloning:    zero-shot XTTS v2 voice cloning from a voice library —
+                    needs `library_root`.
+      - chatterbox: Chatterbox emotion-aware TTS from a voice library —
+                    needs `library_root`.
+    """
     name = (name or "kokoro").lower()
     if name == "kokoro":
         from .backends.kokoro import KokoroBackend
@@ -64,7 +73,26 @@ def make_backend(name: str, **kwargs) -> Backend:
         if not model_dir:
             raise BackendError("XTTS backend requires `model_dir` (path to fine-tuned model).")
         return XTTSBackend(Path(model_dir))
-    raise BackendError(f"Unknown backend: {name!r}. Available: kokoro, xtts.")
+    if name == "cloning":
+        from .backends.cloning import CloningBackend
+        library_root = kwargs.get("library_root")
+        if not library_root:
+            raise BackendError(
+                "Cloning backend requires `library_root` (path to voice library)."
+            )
+        return CloningBackend(Path(library_root))
+    if name == "chatterbox":
+        from .backends.chatterbox import ChatterboxBackend
+        library_root = kwargs.get("library_root")
+        if not library_root:
+            raise BackendError(
+                "Chatterbox backend requires `library_root` (path to voice library)."
+            )
+        return ChatterboxBackend(Path(library_root))
+    raise BackendError(
+        f"Unknown backend: {name!r}. "
+        "Available: kokoro, xtts, cloning, chatterbox."
+    )
 
 
 def iter_voices_used(cast: VoiceCast, speakers: Iterator[str]) -> list[str]:

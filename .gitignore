@@ -52,6 +52,11 @@ datasets/
 data/raw/
 data/processed/
 
+# Voice reference clip library — user-generated; large; license-sensitive
+# (RAVDESS is CC-BY-NC-SA, your own recordings are yours, but neither
+# belongs in source control).
+voices/
+
 # Manuscripts — user-supplied content. Place yours in input/ and it stays local.
 input/
 *.docx

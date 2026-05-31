@@ -77,21 +77,43 @@ def _pick_mode() -> str:
         return choice
 
 
-def _pick_backend() -> tuple[str, Path | None]:
+def _pick_backend() -> tuple[str, Path | None, Path | None]:
+    """Return (backend_name, model_dir, library_root). Unused slots are None."""
     console.print()
     console.print(Panel.fit(
         "[bold cyan]Step 3 / 4[/bold cyan]  TTS backend",
         border_style="cyan",
     ))
-    console.print("[dim]kokoro[/dim] — free, local, fast, 50+ built-in voices (default)")
-    console.print("[dim]xtts  [/dim] — use a fine-tuned XTTS v2 model you trained with `audiobook train`")
+    console.print("[dim]kokoro    [/dim] — free, local, fast, 50+ built-in voices (default)")
+    console.print("[dim]cloning   [/dim] — XTTS v2 voice cloning from a voice library (emotion via reference clips)")
+    console.print("[dim]chatterbox[/dim] — Chatterbox with emotion-intensity knob (one ref per character)")
+    console.print("[dim]xtts      [/dim] — use a fine-tuned XTTS v2 model from `audiobook train`")
     while True:
         choice = Prompt.ask(
-            "[bold]Backend[/bold]", choices=["kokoro", "xtts"], default="kokoro"
+            "[bold]Backend[/bold]",
+            choices=["kokoro", "cloning", "chatterbox", "xtts"], default="kokoro",
         )
         if choice == "kokoro":
-            return "kokoro", None
-        # XTTS — ask for model dir.
+            return "kokoro", None, None
+        if choice in ("cloning", "chatterbox"):
+            default_lib = str(_project_root() / "voices")
+            raw = Prompt.ask(
+                "[bold]Path to voice library directory[/bold]",
+                default=default_lib,
+            )
+            lib_root = Path(raw).expanduser().resolve()
+            if not lib_root.exists():
+                console.print(f"[red]Library not found: {lib_root}[/red]")
+                console.print(
+                    "[dim]Populate it first with: "
+                    "audiobook voices import-ravdess --path /path/to/RAVDESS[/dim]"
+                )
+                if not Confirm.ask("Try a different path?", default=True):
+                    console.print("[yellow]Falling back to kokoro.[/yellow]")
+                    return "kokoro", None, None
+                continue
+            return choice, None, lib_root
+        # xtts (fine-tuned)
         default_dir = str(_project_root() / "models")
         raw = Prompt.ask(
             "[bold]Path to fine-tuned XTTS model directory[/bold]",
@@ -103,9 +125,9 @@ def _pick_backend() -> tuple[str, Path | None]:
             console.print("[dim]Train one first with: audiobook train run --data ... --out ...[/dim]")
             if not Confirm.ask("Try a different path?", default=True):
                 console.print("[yellow]Falling back to kokoro.[/yellow]")
-                return "kokoro", None
+                return "kokoro", None, None
             continue
-        return "xtts", model_dir
+        return "xtts", model_dir, None
 
 
 def _pick_output_options() -> tuple[Path, Path | None, bool, str]:
@@ -135,7 +157,8 @@ def _pick_output_options() -> tuple[Path, Path | None, bool, str]:
 
 
 def _confirm_and_render(
-    manuscript: Path, mode: str, backend: str, backend_model_dir: Path | None,
+    manuscript: Path, mode: str, backend: str,
+    backend_model_dir: Path | None, backend_library_root: Path | None,
     out_dir: Path, cover: Path | None, package: bool, bitrate: str,
 ) -> None:
     console.print()
@@ -148,7 +171,12 @@ def _confirm_and_render(
     summary.add_column()
     summary.add_row("Manuscript:", str(manuscript))
     summary.add_row("Mode:",        mode)
-    summary.add_row("Backend:",     backend + (f" (model: {backend_model_dir})" if backend_model_dir else ""))
+    backend_descr = backend
+    if backend_model_dir:
+        backend_descr += f" (model: {backend_model_dir})"
+    if backend_library_root:
+        backend_descr += f" (library: {backend_library_root})"
+    summary.add_row("Backend:",     backend_descr)
     summary.add_row("Output:",      str(out_dir))
     summary.add_row("Cover:",       str(cover) if cover else "—")
     summary.add_row("Package M4B:", "yes" if package else "no")
@@ -178,6 +206,7 @@ def _confirm_and_render(
             voices=voices,
             backend_name=backend,
             backend_model_dir=backend_model_dir,
+            backend_library_root=backend_library_root,
         )
         results = render_book(book, cfg)
         total_sec = sum(r.duration_seconds for r in results)
@@ -211,7 +240,7 @@ def run_interactive() -> None:
     _show_parse_preview(manuscript)
 
     mode = _pick_mode()
-    backend, model_dir = _pick_backend()
+    backend, model_dir, library_root = _pick_backend()
     out_dir, cover, package, bitrate = _pick_output_options()
 
     _confirm_and_render(
@@ -219,6 +248,7 @@ def run_interactive() -> None:
         mode=mode,
         backend=backend,
         backend_model_dir=model_dir,
+        backend_library_root=library_root,
         out_dir=out_dir,
         cover=cover,
         package=package,

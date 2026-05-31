@@ -141,19 +141,91 @@ Dusthollow: "Dust Hollow"
 
 ## Emotion: how it works
 
-Two layers stacked on top of Kokoro:
+Three escalating layers — pick the one whose setup cost matches the
+emotional fidelity you want.
 
-1. **Auto-detection from text.** Dialogue tag verbs (whispered, shouted,
-   growled, sobbed, gasped, cackled, …) are matched in the narration
-   surrounding each dialogue line, plus heuristics for ALL-CAPS shouting
-   and `!!`-style excitement.
+### Layer 1 — Kokoro + per-emotion voice/speed overrides (free, no setup)
 
-2. **Per-emotion voice overrides.** For each character you can specify
-   different `voice` / `speed` per emotion. Kokoro has no native emotion
-   control, so we map emotion to prosody by adjusting these parameters.
+- Dialogue-tag verbs (whispered, shouted, growled, sobbed, gasped, …)
+  are auto-detected in the narration around each dialogue line, plus
+  heuristics for ALL-CAPS shouting and `!!`-style excitement.
+- Each character can map each emotion to a different Kokoro voice ID
+  and/or speed in `config/voices.yaml`. The system already ships with
+  sensible per-emotion speed adjustments.
 
-For finer-grained, more expressive emotion you train your own
-voices. See below.
+Limit: Kokoro itself has no emotion knob — this is prosody nudging, not
+emotional acting. Sounds *competent*, not *moving*.
+
+### Layer 2 — Voice library + zero-shot cloning (free; ~10 min setup)
+
+This is where voices actually get emotional. You give the system a
+short audio clip per (character, emotion), e.g. a 10-second
+`voices/Gael/angry.wav`. At render time, XTTS v2 or Chatterbox **clones
+the voice AND copies the emotional prosody** from that clip into the
+new line. No training, no GPU strictly required.
+
+The fastest way to get going is the RAVDESS bulk-import — it gives you
+emotional reference clips for every emotion in under 5 minutes:
+
+```bash
+# 0. Install the cloning extras (~3 GB; one-time)
+pip install -e ".[training]"          # for XTTS cloning backend
+pip install -e ".[chatterbox]"        # for Chatterbox backend
+
+# 1. Download RAVDESS Speech (free, ~1.4 GB)
+#    https://zenodo.org/record/1188976
+unzip Audio_Speech_Actors_01-24.zip -d ~/datasets/RAVDESS
+
+# 2. Bulk-import as the library's stock emotion voices
+audiobook voices import-ravdess --path ~/datasets/RAVDESS
+
+# 3. (Optional) Map specific RAVDESS actors to your characters
+audiobook voices import-ravdess --path ~/datasets/RAVDESS \
+  --map "Gael=01,Sera=02,Brenneth=04,narrator=11"
+
+# 4. Render with the cloning backend
+audiobook render /path/to/manuscript.md \
+  --backend cloning --library voices/
+
+# Or with Chatterbox (explicit emotion intensity knob)
+audiobook render /path/to/manuscript.md \
+  --backend chatterbox --library voices/
+```
+
+To replace any stock clip with your own voice:
+
+```bash
+# Record live from your mic (templates printed on-screen to read aloud)
+audiobook voices record --character Gael --emotion angry
+
+# Or import an existing audio file
+audiobook voices import \
+  --character Gael --emotion sad \
+  --file ~/recordings/gael_sad.wav --overwrite
+
+# See what's in the library
+audiobook voices list
+audiobook voices show Gael
+audiobook voices coverage           # what's missing
+audiobook voices validate           # any clips below recommended length / sample rate?
+audiobook voices templates          # sample sentences to read for each emotion
+```
+
+**XTTS cloning vs Chatterbox** — both are good; pick by what you have:
+
+| | XTTS cloning | Chatterbox |
+|---|---|---|
+| Best with | Emotion-specific clips per character | One neutral clip per character |
+| Emotion intensity | Copied from reference prosody | Explicit 0-2 knob per emotion |
+| Quality | Very good | Very good, more theatrical |
+| Setup size | ~3 GB | ~2 GB |
+| Render speed | Moderate | Faster |
+
+### Layer 3 — Fine-tune your own XTTS model (free; GPU + hours)
+
+For the absolute best quality and full control, fine-tune XTTS v2 on
+your own emotion-labeled data. See *Training your own emotion-aware
+voices* below — this is overkill for most projects.
 
 ## Training your own emotion-aware voices (XTTS v2 fine-tuning)
 
@@ -259,13 +331,17 @@ audiobook-converter/
     ├── attribution.py          # rule-based dialogue speaker tagging
     ├── pronounce.py            # phonetic substitution
     ├── emotion.py              # dialogue-tag -> emotion label
+    ├── voice_library.py        # voices/<character>/<emotion>.wav tree
+    ├── voice_cli.py            # `audiobook voices ...` subcommands
     ├── synth.py                # backend factory + voice cast loader
     ├── stitch.py               # assemble paragraphs into chapter audio
     ├── package.py              # M4B with chapter markers + cover art
     ├── backends/
     │   ├── base.py             # Backend protocol
     │   ├── kokoro.py           # Kokoro TTS implementation
-    │   └── xtts.py             # fine-tuned XTTS adapter
+    │   ├── xtts.py             # fine-tuned XTTS adapter
+    │   ├── cloning.py          # zero-shot XTTS v2 voice cloning
+    │   └── chatterbox.py       # Chatterbox with emotion intensity
     └── training/
         ├── dataset.py          # RAVDESS / ESD / custom ingest + prepare
         ├── train.py            # XTTS v2 fine-tune runner
