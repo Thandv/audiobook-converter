@@ -192,6 +192,12 @@ def apply(
         panel_lines.append("\nPronunciations added:")
         for k, v in plan.pronunciations_added.items():
             panel_lines.append(f"  • {k} -> {v}")
+    if plan.pronunciations_skipped:
+        # Show top 15 skipped so user can sanity-check the filter.
+        items = list(plan.pronunciations_skipped.items())[:15]
+        panel_lines.append(f"\n[dim]Skipped (top {len(items)} of {len(plan.pronunciations_skipped)}):[/dim]")
+        for k, reason in items:
+            panel_lines.append(f"  [dim]• {k}: {reason}[/dim]")
     if plan.chapters_to_rerender:
         panel_lines.append(
             "\nChapters that need re-rendering: "
