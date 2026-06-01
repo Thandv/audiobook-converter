@@ -132,6 +132,73 @@ audiobook
 You'll be walked through manuscript selection, mode, backend, output
 directory, and cover art via Rich prompts.
 
+## Reviewer / observer cycle (`audiobook review`)
+
+After your first render, the reviewer **listens** to the audiobook and
+proposes improvements. Two main checks fire automatically:
+
+1. **Whisper STT + alignment** — transcribes each chapter and compares
+   the words it heard to the source manuscript. Reliably catches
+   *mispronunciations* and *dropped words* with very high precision.
+2. **DSP metrics** — per-chapter pace (WPM), volume (RMS / peak),
+   silence runs, clipping. Flags chapters that are off from the
+   book-wide mean.
+3. **Audio emotion classifier** (optional, via `[review]` extras) —
+   uses a wav2vec2 model to predict each chapter's emotional
+   distribution from the audio. Compares to what the text analyzer
+   *intended*. Flags chapters where the emotion didn't land.
+
+```bash
+# One-time install of the review extras (Whisper + transformers + librosa)
+pip install -e ".[review]"
+
+# Listen to the whole book, produce findings JSON
+audiobook review run /path/to/book.md \
+  --chapters-dir output/single/chapters \
+  --out output/review.json
+
+# See what was found
+audiobook review show --report output/review.json --severity suggestion
+
+# Apply the safe fixes (pronunciations) + delete affected chapters for re-render
+audiobook review apply --report output/review.json \
+  --chapters-dir output/single/chapters
+
+# Re-render the affected chapters
+audiobook render /path/to/book.md --mode single --emotion-analyzer content --resume
+```
+
+Or run the whole loop automatically:
+
+```bash
+# review -> apply fixes -> re-render -> review again, up to 3 rounds
+# stops early when no auto-fixable findings remain
+audiobook review iterate /path/to/book.md \
+  --chapters-dir output/single/chapters \
+  --rounds 3
+```
+
+### What gets auto-fixed vs proposed
+
+| Finding | Auto-applied? | What changes |
+|---|---|---|
+| **Pronunciation** (Whisper hears 'gail' for 'Gael' x3+ times) | ✅ Yes | Appends to `config/pronunciations.yaml`; affected chapter file deleted; next render fixes it |
+| **Dropped word** (≥6 source words missing from audio) | ✅ Yes | Affected chapter scheduled for re-render |
+| **Emotion mismatch** (intended angry, audio sounds neutral) | ⚠️ Proposed | Logs the gap; suggests emotion override |
+| **Pace outlier** (chapter WPM ≥ 1.5 σ from book mean) | ⚠️ Proposed | Suggests speed adjustment in voices.yaml |
+| **Volume / silence / clipping** | ℹ️ Reported | No automatic mutation; for your inspection |
+
+`--apply-all` makes the proposed ones auto-apply too.
+
+### Cost / runtime
+
+- First review pass downloads Whisper model (~70 MB for `base.en`) and
+  the wav2vec2 emotion model (~360 MB) to `~/.cache/huggingface/`.
+- A full review of a 12-hour audiobook takes **~20–40 minutes** on CPU
+  (Apple Silicon Neural Engine via int8). With CUDA, under 10 minutes.
+- The audio emotion check adds another ~5 minutes; skip with
+  `--skip-emotion` if you don't care about that signal.
+
 ## Configuration
 
 Two YAML files in `config/`:
@@ -449,6 +516,15 @@ audiobook-converter/
     ├── emotion_cli.py          # `audiobook emotions ...` subcommands
     ├── voice_library.py        # voices/<character>/<emotion>.wav tree
     ├── voice_cli.py            # `audiobook voices ...` subcommands
+    ├── review_cli.py           # `audiobook review ...` subcommands
+    ├── review/
+    │   ├── types.py            # Finding + ReviewReport
+    │   ├── transcribe.py       # faster-whisper wrapper
+    │   ├── align.py            # source vs transcript diff
+    │   ├── metrics.py          # DSP metrics (pace, RMS, silence, clip)
+    │   ├── emotion_check.py    # wav2vec2 audio emotion classifier
+    │   ├── reviewer.py         # orchestrates the three review passes
+    │   └── fixer.py            # applies safe fixes, plans re-render
     ├── synth.py                # backend factory + voice cast loader
     ├── stitch.py               # assemble paragraphs into chapter audio
     ├── package.py              # M4B with chapter markers + cover art

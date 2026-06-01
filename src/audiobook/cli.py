@@ -321,6 +321,11 @@ cli.add_command(_voices_group)
 from .emotion_cli import emotions as _emotions_group  # noqa: E402
 cli.add_command(_emotions_group)
 
+# Review / observer / iterate (`audiobook review ...`). Always available;
+# the heavy [review] extras are imported lazily inside the subcommands.
+from .review_cli import review as _review_group  # noqa: E402
+cli.add_command(_review_group)
+
 
 # Lazy import + register the training subcommand group. Keeping the
 # import lazy means the heavy training deps don't fail-fast for normal

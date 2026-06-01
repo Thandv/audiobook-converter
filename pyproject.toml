@@ -60,13 +60,23 @@ ml = [
     "torch>=2.2",
     "transformers>=4.40",
 ]
+# Review pipeline: Whisper STT for pronunciation/word-drop checks,
+# librosa for DSP metrics, transformers for audio emotion classifier.
+review = [
+    "faster-whisper>=1.0",
+    "librosa>=0.10",
+    "torch>=2.2",
+    "transformers>=4.40",
+    "scipy>=1.11",
+    "numpy>=1.26",
+]
 # Bundling tools for the standalone-binary `make binary` target.
 binary = [
     "pyinstaller>=6.6",
 ]
 # Everything (for development).
 dev = [
-    "audiobook-converter[training,chatterbox,ml,binary]",
+    "audiobook-converter[training,chatterbox,ml,review,binary]",
     "pytest>=7.4",
     "ruff>=0.5",
 ]
